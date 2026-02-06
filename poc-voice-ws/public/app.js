@@ -7,12 +7,21 @@ const joinBtn = $("join");
 const leaveBtn = $("leave");
 const muteBtn = $("mute");
 const unmuteBtn = $("unmute");
+const micLevelEl = $("micLevel");
+const micStateEl = $("micState");
+const micGainEl = $("micGain");
+const audioBin = $("audioBin");
 
 let ws;
 let myId;
 let myName;
 let roomId;
 let localStream;
+let processedStream;
+let audioCtx;
+let analyser;
+let gainNode;
+let meterTimer;
 const peers = new Map();
 
 const iceConfig = {
@@ -38,7 +47,7 @@ function updatePeersList() {
 }
 
 async function ensureLocalAudio() {
-  if (localStream) return localStream;
+  if (processedStream) return processedStream;
   localStream = await navigator.mediaDevices.getUserMedia({
     audio: {
       echoCancellation: true,
@@ -46,7 +55,31 @@ async function ensureLocalAudio() {
       autoGainControl: true
     }
   });
-  return localStream;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const source = audioCtx.createMediaStreamSource(localStream);
+  gainNode = audioCtx.createGain();
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 1024;
+
+  source.connect(gainNode);
+  gainNode.connect(analyser);
+
+  const dest = audioCtx.createMediaStreamDestination();
+  gainNode.connect(dest);
+  processedStream = dest.stream;
+
+  startMicMeter();
+  return processedStream;
+}
+
+async function resumeAudioContext() {
+  if (audioCtx && audioCtx.state !== "running") {
+    try {
+      await audioCtx.resume();
+    } catch {
+      // ignore
+    }
+  }
 }
 
 function createPeerConnection(peerId, peerName) {
@@ -56,6 +89,8 @@ function createPeerConnection(peerId, peerName) {
   const remoteAudio = document.createElement("audio");
   remoteAudio.autoplay = true;
   remoteAudio.playsInline = true;
+  remoteAudio.muted = false;
+  audioBin.appendChild(remoteAudio);
 
   pc.onicecandidate = (e) => {
     if (e.candidate) {
@@ -66,6 +101,7 @@ function createPeerConnection(peerId, peerName) {
   pc.ontrack = (e) => {
     if (remoteAudio.srcObject !== e.streams[0]) {
       remoteAudio.srcObject = e.streams[0];
+      remoteAudio.play().catch(() => {});
       log(`Remote audio stream from ${peerId.slice(0, 8)}`);
     }
   };
@@ -134,6 +170,7 @@ async function join() {
   myName = $("name").value.trim() || "guest";
   roomId = $("room").value.trim() || "demo";
 
+  await resumeAudioContext();
   ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`);
 
   ws.onopen = () => {
@@ -206,12 +243,28 @@ function leave() {
   if (ws) ws.close();
   for (const [id, peer] of peers.entries()) {
     peer.pc.close();
+    if (peer.audio && peer.audio.parentNode) {
+      peer.audio.srcObject = null;
+      peer.audio.parentNode.removeChild(peer.audio);
+    }
     peers.delete(id);
   }
   if (localStream) {
     for (const track of localStream.getTracks()) track.stop();
     localStream = null;
   }
+  processedStream = null;
+  if (audioCtx) {
+    audioCtx.close();
+    audioCtx = null;
+  }
+  if (meterTimer) {
+    clearInterval(meterTimer);
+    meterTimer = null;
+  }
+  micLevelEl.style.width = "0%";
+  micStateEl.textContent = "Idle";
+  micStateEl.classList.remove("active");
   updatePeersList();
 }
 
@@ -227,5 +280,33 @@ unmuteBtn.onclick = () => {
   log("Unmuted");
 };
 
+micGainEl.oninput = () => {
+  if (!gainNode) return;
+  gainNode.gain.value = Number(micGainEl.value);
+};
+
 joinBtn.onclick = () => join().catch((e) => log(e.message));
 leaveBtn.onclick = () => leave();
+
+function startMicMeter() {
+  if (!analyser) return;
+  const data = new Uint8Array(analyser.fftSize);
+  if (meterTimer) clearInterval(meterTimer);
+  meterTimer = setInterval(() => {
+    analyser.getByteTimeDomainData(data);
+    let max = 0;
+    for (let i = 0; i < data.length; i++) {
+      const v = Math.abs(data[i] - 128) / 128;
+      if (v > max) max = v;
+    }
+    const pct = Math.min(1, max * 3);
+    micLevelEl.style.width = `${Math.round(pct * 100)}%`;
+    if (pct > 0.1) {
+      micStateEl.textContent = "Speaking";
+      micStateEl.classList.add("active");
+    } else {
+      micStateEl.textContent = "Idle";
+      micStateEl.classList.remove("active");
+    }
+  }, 80);
+}

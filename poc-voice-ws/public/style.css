@@ -98,3 +98,52 @@ pre {
 }
 
 ul { margin: 0; padding-left: 18px; }
+
+.audio-bin {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  left: -9999px;
+}
+
+.mic {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 220px;
+}
+
+.mic-label {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.mic-state {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.mic-state.active {
+  color: var(--accent);
+}
+
+.mic-meter {
+  height: 10px;
+  background: #0f132e;
+  border-radius: 999px;
+  border: 1px solid #2a2f5f;
+  overflow: hidden;
+}
+
+.mic-level {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #4ee1a0, #f6d34a, #ef476f);
+  transition: width 80ms linear;
+}
+
+.mic-gain input[type="range"] {
+  width: 200px;
+}

@@ -37,6 +37,19 @@
         <button id="unmute" disabled>Unmute</button>
       </div>
       <div class="row">
+        <div class="mic">
+          <div class="mic-label">
+            <strong>Mic</strong>
+            <span id="micState" class="mic-state">Idle</span>
+          </div>
+          <div class="mic-meter">
+            <div id="micLevel" class="mic-level"></div>
+          </div>
+          <label class="mic-gain">
+            Mic Gain
+            <input id="micGain" type="range" min="0" max="2" step="0.05" value="1" />
+          </label>
+        </div>
         <div>
           <strong>Peers</strong>
           <ul id="peers"></ul>
@@ -47,6 +60,7 @@
         </div>
       </div>
     </section>
+    <div id="audioBin" class="audio-bin"></div>
   </main>
 
   <script src="/app.js"></script>
