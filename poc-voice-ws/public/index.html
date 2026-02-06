@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Voice Call POC (WS Signaling)</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <h1>Voice Call POC</h1>
+      <p>Audio-only WebRTC with WebSocket signaling</p>
+    </header>
+
+    <section class="panel">
+      <div class="row">
+        <label>
+          Name
+          <input id="name" placeholder="guest" />
+        </label>
+        <label>
+          Room
+          <input id="room" value="demo" />
+        </label>
+      </div>
+      <div class="row">
+        <button id="join">Join</button>
+        <button id="leave" disabled>Leave</button>
+        <span id="status" class="status">Idle</span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="row">
+        <button id="mute" disabled>Mute</button>
+        <button id="unmute" disabled>Unmute</button>
+      </div>
+      <div class="row">
+        <div>
+          <strong>Peers</strong>
+          <ul id="peers"></ul>
+        </div>
+        <div>
+          <strong>Logs</strong>
+          <pre id="log"></pre>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
