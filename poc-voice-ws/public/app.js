@@ -10,6 +10,9 @@ const unmuteBtn = $("unmute");
 const micLevelEl = $("micLevel");
 const micStateEl = $("micState");
 const micGainEl = $("micGain");
+const gateEnabledEl = $("gateEnabled");
+const gateThresholdEl = $("gateThreshold");
+const remoteGainEl = $("remoteGain");
 const audioBin = $("audioBin");
 
 let ws;
@@ -21,6 +24,9 @@ let processedStream;
 let audioCtx;
 let analyser;
 let gainNode;
+let gateNode;
+let highpass;
+let compressor;
 let meterTimer;
 const peers = new Map();
 
@@ -85,11 +91,30 @@ async function ensureLocalAudio() {
   });
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   const source = audioCtx.createMediaStreamSource(localStream);
+  highpass = audioCtx.createBiquadFilter();
+  highpass.type = "highpass";
+  highpass.frequency.value = 80;
+  highpass.Q.value = 0.7;
+
+  compressor = audioCtx.createDynamicsCompressor();
+  compressor.threshold.value = -24;
+  compressor.knee.value = 12;
+  compressor.ratio.value = 4;
+  compressor.attack.value = 0.003;
+  compressor.release.value = 0.25;
+
+  gateNode = audioCtx.createGain();
+  gateNode.gain.value = 1;
+
   gainNode = audioCtx.createGain();
+  gainNode.gain.value = Number(micGainEl.value || 0.8);
   analyser = audioCtx.createAnalyser();
   analyser.fftSize = 1024;
 
-  source.connect(gainNode);
+  source.connect(highpass);
+  highpass.connect(compressor);
+  compressor.connect(gateNode);
+  gateNode.connect(gainNode);
   gainNode.connect(analyser);
 
   const dest = audioCtx.createMediaStreamDestination();
@@ -118,6 +143,7 @@ function createPeerConnection(peerId, peerName) {
   remoteAudio.autoplay = true;
   remoteAudio.playsInline = true;
   remoteAudio.muted = false;
+  remoteAudio.volume = Number(remoteGainEl.value || 1);
   audioBin.appendChild(remoteAudio);
 
   pc.onicecandidate = (e) => {
@@ -152,13 +178,15 @@ async function addLocalTracks(pc) {
   for (const track of stream.getTracks()) {
     pc.addTrack(track, stream);
   }
+  tuneAudioSender(pc);
 }
 
 async function makeOffer(peerId) {
   const pc = createPeerConnection(peerId, peers.get(peerId)?.name);
   await addLocalTracks(pc);
-  const offer = await pc.createOffer();
+  const offer = await pc.createOffer({ offerToReceiveAudio: true });
   await pc.setLocalDescription(offer);
+  await applyOpusParams(pc);
   send({ type: "offer", to: peerId, sdp: pc.localDescription });
 }
 
@@ -169,6 +197,7 @@ async function handleOffer(msg) {
   await pc.setRemoteDescription(msg.sdp);
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
+  await applyOpusParams(pc);
   send({ type: "answer", to: from, sdp: pc.localDescription });
 }
 
@@ -322,6 +351,22 @@ micGainEl.oninput = () => {
   gainNode.gain.value = Number(micGainEl.value);
 };
 
+gateEnabledEl.oninput = () => {
+  if (!gateNode) return;
+  if (!gateEnabledEl.checked) gateNode.gain.value = 1;
+};
+
+gateThresholdEl.oninput = () => {
+  // handled in meter loop
+};
+
+remoteGainEl.oninput = () => {
+  const v = Number(remoteGainEl.value);
+  for (const peer of peers.values()) {
+    if (peer.audio) peer.audio.volume = v;
+  }
+};
+
 joinBtn.onclick = () => join().catch((e) => log(e.message));
 leaveBtn.onclick = () => leave();
 
@@ -332,10 +377,13 @@ function startMicMeter() {
   meterTimer = setInterval(() => {
     analyser.getByteTimeDomainData(data);
     let max = 0;
+    let sum = 0;
     for (let i = 0; i < data.length; i++) {
       const v = Math.abs(data[i] - 128) / 128;
+      sum += v * v;
       if (v > max) max = v;
     }
+    const rms = Math.sqrt(sum / data.length);
     const pct = Math.min(1, max * 3);
     micLevelEl.style.width = `${Math.round(pct * 100)}%`;
     if (pct > 0.1) {
@@ -345,5 +393,37 @@ function startMicMeter() {
       micStateEl.textContent = "Idle";
       micStateEl.classList.remove("active");
     }
+
+    if (gateNode && gateEnabledEl.checked) {
+      const threshold = Number(gateThresholdEl.value || 0.04);
+      const target = rms < threshold ? 0.0 : 1.0;
+      gateNode.gain.setTargetAtTime(target, audioCtx.currentTime, 0.03);
+    }
   }, 80);
+}
+
+function tuneAudioSender(pc) {
+  const sender = pc.getSenders().find((s) => s.track && s.track.kind === "audio");
+  if (!sender || !sender.setParameters) return;
+  const params = sender.getParameters();
+  params.encodings = params.encodings || [{}];
+  params.encodings[0].maxBitrate = 32000;
+  sender.setParameters(params).catch(() => {});
+}
+
+async function applyOpusParams(pc) {
+  const desc = pc.localDescription;
+  if (!desc || !desc.sdp) return;
+  const sdp = desc.sdp;
+  const opusPtMatch = sdp.match(/a=rtpmap:(\\d+) opus\\/48000\\/2/);
+  if (!opusPtMatch) return;
+  const pt = opusPtMatch[1];
+  const fmtpLine = `a=fmtp:${pt} minptime=10;useinbandfec=1;usedtx=1;maxaveragebitrate=32000;ptime=20`;
+  let newSdp = sdp;
+  if (sdp.includes(`a=fmtp:${pt}`)) {
+    newSdp = sdp.replace(new RegExp(`a=fmtp:${pt}.*`), fmtpLine);
+  } else {
+    newSdp = sdp.replace(`a=rtpmap:${pt} opus/48000/2`, `a=rtpmap:${pt} opus/48000/2\\r\\n${fmtpLine}`);
+  }
+  await pc.setLocalDescription({ type: desc.type, sdp: newSdp });
 }

@@ -47,7 +47,19 @@
           </div>
           <label class="mic-gain">
             Mic Gain
-            <input id="micGain" type="range" min="0" max="2" step="0.05" value="1" />
+            <input id="micGain" type="range" min="0" max="1" step="0.05" value="0.8" />
+          </label>
+          <label class="mic-gain">
+            Noise Gate
+            <input id="gateEnabled" type="checkbox" checked />
+          </label>
+          <label class="mic-gain">
+            Gate Threshold
+            <input id="gateThreshold" type="range" min="0" max="0.2" step="0.005" value="0.04" />
+          </label>
+          <label class="mic-gain">
+            Remote Volume
+            <input id="remoteGain" type="range" min="0" max="1" step="0.05" value="1" />
           </label>
         </div>
         <div>

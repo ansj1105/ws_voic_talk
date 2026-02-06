@@ -147,3 +147,7 @@ ul { margin: 0; padding-left: 18px; }
 .mic-gain input[type="range"] {
   width: 200px;
 }
+
+.mic-gain input[type="checkbox"] {
+  width: auto;
+}
