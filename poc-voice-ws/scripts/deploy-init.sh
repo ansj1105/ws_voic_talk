@@ -27,7 +27,8 @@ mkdir -p "$ROOT/deploy/certbot/www" "$ROOT/deploy/certbot/conf"
 /usr/bin/env docker compose -f "$ROOT/deploy/docker-compose.nginx.yml" up -d nginx app
 
 # Request cert
-/usr/bin/env docker compose -f "$ROOT/deploy/docker-compose.nginx.yml" run --rm certbot \
+/usr/bin/env docker compose -f "$ROOT/deploy/docker-compose.nginx.yml" run --rm \
+  --entrypoint certbot certbot \
   certonly --webroot -w /var/www/certbot \
   --email "$EMAIL" --agree-tos --no-eff-email \
   -d "$DOMAIN"
