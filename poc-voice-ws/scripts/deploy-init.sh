@@ -18,8 +18,8 @@ if [ -z "${DOMAIN:-}" ] || [ -z "${EMAIL:-}" ]; then
   exit 1
 fi
 
-# Render nginx config
-sed "s/__DOMAIN__/${DOMAIN}/g" "$ROOT/deploy/nginx.conf.template" > "$ROOT/deploy/nginx.conf"
+# Render nginx http-only config first (no certs)
+sed "s/__DOMAIN__/${DOMAIN}/g" "$ROOT/deploy/nginx.http.conf.template" > "$ROOT/deploy/nginx.conf"
 
 mkdir -p "$ROOT/deploy/certbot/www" "$ROOT/deploy/certbot/conf"
 
@@ -33,7 +33,8 @@ mkdir -p "$ROOT/deploy/certbot/www" "$ROOT/deploy/certbot/conf"
   --email "$EMAIL" --agree-tos --no-eff-email \
   -d "$DOMAIN"
 
-# Reload nginx with certs
+# Render nginx https config and reload
+sed "s/__DOMAIN__/${DOMAIN}/g" "$ROOT/deploy/nginx.conf.template" > "$ROOT/deploy/nginx.conf"
 /usr/bin/env docker compose -f "$ROOT/deploy/docker-compose.nginx.yml" restart nginx
 
 # Start renew loop
