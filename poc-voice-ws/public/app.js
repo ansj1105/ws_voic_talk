@@ -39,9 +39,19 @@ function setStatus(text) {
 
 function updatePeersList() {
   peersEl.innerHTML = "";
+  if (myId) {
+    const me = document.createElement("li");
+    me.textContent = `You (${myId.slice(0, 8)})`;
+    peersEl.appendChild(me);
+  }
   for (const [id, p] of peers.entries()) {
     const li = document.createElement("li");
     li.textContent = `${p.name || "peer"} (${id.slice(0, 8)})`;
+    peersEl.appendChild(li);
+  }
+  if (!myId && peers.size === 0) {
+    const li = document.createElement("li");
+    li.textContent = "No peers";
     peersEl.appendChild(li);
   }
 }
@@ -170,6 +180,13 @@ async function join() {
   myName = $("name").value.trim() || "guest";
   roomId = $("room").value.trim() || "demo";
 
+  try {
+    await ensureLocalAudio();
+    log("Mic permission granted");
+  } catch (e) {
+    log(`Mic permission error: ${e.message || e}`);
+  }
+
   await resumeAudioContext();
   ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`);
 
@@ -187,6 +204,7 @@ async function join() {
     const msg = JSON.parse(ev.data);
     if (msg.type === "joined") {
       myId = msg.id;
+      updatePeersList();
       for (const peer of msg.peers) {
         createPeerConnection(peer.id, peer.name);
         if (isInitiator(peer.id)) {
