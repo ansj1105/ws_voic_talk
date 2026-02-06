@@ -1,0 +1,8 @@
+listening-port=3478
+fingerprint
+lt-cred-mech
+user=__TURN_USER__:__TURN_PASS__
+realm=__TURN_REALM__
+external-ip=__TURN_PUBLIC_IP__
+min-port=49160
+max-port=49200

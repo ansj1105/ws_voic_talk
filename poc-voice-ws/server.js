@@ -8,6 +8,23 @@ const PORT = process.env.PORT || 8080;
 const PUBLIC_DIR = path.resolve("./public");
 
 const server = http.createServer((req, res) => {
+  if (req.url === "/config") {
+    const iceServers = [{ urls: "stun:stun.l.google.com:19302" }];
+    const turnUrl = process.env.TURN_URL;
+    const turnUser = process.env.TURN_USERNAME;
+    const turnPass = process.env.TURN_PASSWORD;
+    if (turnUrl && turnUser && turnPass) {
+      iceServers.push({
+        urls: turnUrl,
+        username: turnUser,
+        credential: turnPass
+      });
+    }
+    const body = JSON.stringify({ iceServers });
+    res.writeHead(200, { "Content-Type": "application/json" });
+    return res.end(body);
+  }
+
   const url = req.url === "/" ? "/index.html" : req.url;
   const filePath = path.join(PUBLIC_DIR, url);
 

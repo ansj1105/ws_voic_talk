@@ -18,8 +18,24 @@ if [ -z "${DOMAIN:-}" ] || [ -z "${EMAIL:-}" ]; then
   exit 1
 fi
 
+if [ -z "${TURN_PUBLIC_IP:-}" ] || [ -z "${TURN_USER:-}" ] || [ -z "${TURN_PASS:-}" ]; then
+  echo "TURN_PUBLIC_IP, TURN_USER, TURN_PASS must be set in deploy/.env"
+  exit 1
+fi
+
+TURN_REALM="${TURN_REALM:-$DOMAIN}"
+TURN_URL="turn:${TURN_PUBLIC_IP}:3478?transport=udp"
+export TURN_URL TURN_USER TURN_PASS
+
 # Render nginx http-only config first (no certs)
 sed "s/__DOMAIN__/${DOMAIN}/g" "$ROOT/deploy/nginx.http.conf.template" > "$ROOT/deploy/nginx.conf"
+
+# Render turnserver config
+sed -e "s/__TURN_USER__/${TURN_USER}/g" \
+    -e "s/__TURN_PASS__/${TURN_PASS}/g" \
+    -e "s/__TURN_REALM__/${TURN_REALM}/g" \
+    -e "s/__TURN_PUBLIC_IP__/${TURN_PUBLIC_IP}/g" \
+    "$ROOT/deploy/turnserver.conf.template" > "$ROOT/deploy/turnserver.conf"
 
 mkdir -p "$ROOT/deploy/certbot/www" "$ROOT/deploy/certbot/conf"
 

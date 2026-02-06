@@ -24,9 +24,27 @@ let gainNode;
 let meterTimer;
 const peers = new Map();
 
-const iceConfig = {
+let iceConfig = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
 };
+let configLoaded = false;
+
+async function loadConfig() {
+  if (configLoaded) return;
+  try {
+    const res = await fetch("/config");
+    if (res.ok) {
+      const data = await res.json();
+      if (data && Array.isArray(data.iceServers)) {
+        iceConfig = { iceServers: data.iceServers };
+        log("Loaded ICE config");
+      }
+    }
+  } catch {
+    // keep default STUN
+  }
+  configLoaded = true;
+}
 
 function log(msg) {
   const line = `[${new Date().toLocaleTimeString()}] ${msg}`;
@@ -180,6 +198,7 @@ async function join() {
   myName = $("name").value.trim() || "guest";
   roomId = $("room").value.trim() || "demo";
 
+  await loadConfig();
   try {
     await ensureLocalAudio();
     log("Mic permission granted");
